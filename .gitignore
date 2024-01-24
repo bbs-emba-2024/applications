@@ -134,3 +134,6 @@ dmypy.json
 .config/
 .jupyter/
 .wget-hsts
+
+# Specific development folders that should be ignored
+notebooks/tmp

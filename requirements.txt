@@ -7,3 +7,4 @@ bayesian-optimization==1.4.3
 tensorflow==2.14.0
 tensorflow-probability==0.22.0
 ortools==9.8.3296
+tensorflow-lattice==2.0.13

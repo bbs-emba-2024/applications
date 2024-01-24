@@ -10,6 +10,7 @@ import os
 from tensorflow.keras import callbacks
 import tensorflow as tf
 from scipy.integrate import odeint
+import tensorflow_lattice as tfl
 
 def click_through_rate(avg_ratings, num_reviews, dollar_ratings):
     dollar_rating_baseline = {"D": 3, "DD": 2, "DDD": 4, "DDDD": 4.5}
@@ -422,7 +423,7 @@ class LagDualDIDIModel(keras.Model):
         self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
 
         # Track the loss change
-        self.ls_tracker.update_state(loss)
+        self.ls_tracker.update_state(-loss)
         self.mse_tracker.update_state(mse)
         self.cst_tracker.update_state(cst)
         return {'loss': self.ls_tracker.result(),
@@ -796,3 +797,47 @@ class NPISIRNablaLayer(keras.layers.Layer):
         # Concatenate
         dy = tf.concat([dS, dI, dR], axis=1)
         return dy
+
+def build_calibrated_lattice_model(data,
+                                   lattice_sizes,
+                                   attribute_names,
+                                   calibration_types,
+                                   calibration_sizes,
+                                   calibration_args={}):
+    in_layers = []
+    cal_layers = []
+    cal_models = []
+    for lsize, aname, ctype, csize in zip(lattice_sizes,
+                                          attribute_names,
+                                          calibration_types,
+                                          calibration_sizes):
+        # Build an input layer
+        in_layer = layers.Input(shape=[1], name=aname)
+        in_layers.append(in_layer)
+        # Build the calibration layer
+        args = {} if aname not in calibration_args else calibration_args[aname]
+        if ctype == 'numeric':
+            cal_layer = tfl.layers.PWLCalibration(
+                input_keypoints=np.quantile(data[aname], np.linspace(0, 1, num=csize)),
+                output_min=0.0, output_max=lsize - 1.0,
+                name=f'{aname}_cal', **args)(in_layer)
+        elif ctype == 'categorical':
+            cal_layer = tfl.layers.CategoricalCalibration(
+                num_buckets=csize,
+                output_min=0.0, output_max=lsize - 1.0,
+                name=f'{aname}_cal', **args)(in_layer)
+        else:
+            raise Exception(f'Unknown calibration type: "{ctype}"')
+        cal_layers.append(cal_layer)
+        # Build a calibration model
+        cal_models.append(keras.Model(in_layer, cal_layer))
+
+    # Build the final lattice layer
+    mdl_out = tfl.layers.Lattice(
+        lattice_sizes=lattice_sizes,
+        output_min=0, output_max=1, name='lattice',
+    )(cal_layers)
+    lm = keras.Model(in_layers, mdl_out)
+    # Return the model
+    return lm, cal_models
+
