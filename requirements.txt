@@ -8,3 +8,6 @@ tensorflow==2.14.0
 tensorflow-probability==0.22.0
 ortools==9.8.3296
 tensorflow-lattice==2.0.13
+seaborn==0.13.2
+xgboost==2.0.3
+shap==0.45.0

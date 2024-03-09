@@ -137,3 +137,4 @@ dmypy.json
 
 # Specific development folders that should be ignored
 notebooks/tmp
+.DS_Store
